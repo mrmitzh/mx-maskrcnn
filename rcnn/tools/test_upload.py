@@ -113,33 +113,32 @@ def demo_maskrcnn(network, ctx, prefix, epoch,img_path,
         cls_scores = scores[:, cls_ind, np.newaxis]
         #print cls_scores.shape, label.shape
         keep = np.where((cls_scores >= thresh) & (label == cls_ind))[0]
-        cls_masks = cls_masks[keep, :, :]
+        #cls_masks = cls_masks[keep, :, :]
         dets = np.hstack((cls_boxes, cls_scores)).astype(np.float32)[keep, :]
         keep = nms(dets)
         #print dets.shape, cls_masks.shape
         all_boxes[cls_ind] = dets[keep, :]
-        all_masks[cls_ind] = cls_masks[keep, :, :]
+        #all_masks[cls_ind] = cls_masks[keep, :, :]
 
     boxes_this_image = [[]] + [all_boxes[j] for j in range(1, len(CLASSES))]
-    masks_this_image = [[]] + [all_masks[j] for j in range(1, len(CLASSES))]
+#    masks_this_image = [[]] + [all_masks[j] for j in range(1, len(CLASSES))]
 
 
     import copy
     import random
-    import json
     class_names = CLASSES
-    color_white = (255, 255, 255)
+#    color_white = (255, 255, 255)
     scale = 1.0
-    im = copy.copy(img_ori)
+#    im = copy.copy(img_ori)
     json_dict = {}
     detect_counter = 0
 
     for j, name in enumerate(class_names):
         if name == '__background__':
             continue
-        color = (random.randint(0, 256), random.randint(0, 256), random.randint(0, 256))  # generate a random color
+        #color = (random.randint(0, 256), random.randint(0, 256), random.randint(0, 256))  # generate a random color
         dets = boxes_this_image[j]
-        masks = masks_this_image[j]
+        #masks = masks_this_image[j]
         for i in range(len(dets)):
             bbox = dets[i, :4] * scale
             if bbox[2] == bbox[0] or bbox[3] == bbox[1] or bbox[0] == bbox[1] or bbox[2] == bbox[3]  :
@@ -155,28 +154,27 @@ def demo_maskrcnn(network, ctx, prefix, epoch,img_path,
             tmp["scores"] = int(100*score)
             json_dict[detect_counter] = tmp
             detect_counter += 1
-            cv2.rectangle(im, (bbox[0], bbox[1]), (bbox[2], bbox[3]), color=color, thickness=2)
-            cv2.putText(im, '%s %.3f' % (class_names[j], score), (bbox[0], bbox[1] + 10),
-                        color=color_white, fontFace=cv2.FONT_HERSHEY_COMPLEX, fontScale=0.5)
-            mask = masks[i, :, :]
-            mask = cv2.resize(mask, (bbox[2] - bbox[0], (bbox[3] - bbox[1])), interpolation=cv2.INTER_LINEAR)
-            mask[mask > 0.5] = 1
-            mask[mask <= 0.5] = 0
-            mask_color = random.randint(0, 255)
-            c = random.randint(0, 2)
-            target = im[bbox[1]: bbox[3], bbox[0]: bbox[2], c] + mask_color * mask
-            target[target >= 255] = 255
-            im[bbox[1]: bbox[3], bbox[0]: bbox[2], c] = target
-    im = im[:,:,(2,1,0)]
-    plt.imshow(im)
-    json_ret = json.dumps(json_dict)
+            #cv2.rectangle(im, (bbox[0], bbox[1]), (bbox[2], bbox[3]), color=color, thickness=2)
+            #cv2.putText(im, '%s %.3f' % (class_names[j], score), (bbox[0], bbox[1] + 10),
+            #            color=color_white, fontFace=cv2.FONT_HERSHEY_COMPLEX, fontScale=0.5)
+            #mask = masks[i, :, :]
+            #mask = cv2.resize(mask, (bbox[2] - bbox[0], (bbox[3] - bbox[1])), interpolation=cv2.INTER_LINEAR)
+            #mask[mask > 0.5] = 1
+            #mask[mask <= 0.5] = 0
+            #mask_color = random.randint(0, 255)
+            #c = random.randint(0, 2)
+            #target = im[bbox[1]: bbox[3], bbox[0]: bbox[2], c] + mask_color * mask
+            #target[target >= 255] = 255
+            #im[bbox[1]: bbox[3], bbox[0]: bbox[2], c] = target
+    #im = im[:,:,(2,1,0)]
+    #plt.imshow(im)
     
 #    plt.savefig('figures/test_result.jpg')
-    if vis:
-        plt.show()
-    else:
-        plt.savefig('figures/test_result.jpg')
-    return json_ret
+#    if vis:
+#        plt.show()
+#    else:
+#        plt.savefig('figures/test_result.jpg')
+    return json_dict
 
 
 
@@ -214,6 +212,7 @@ def uploaded_file(filename):
                                filename)
 
 
+import json
 @app.route('/', methods=['GET', 'POST'])
 def upload_file():
     if request.method == 'POST':
@@ -223,7 +222,9 @@ def upload_file():
             file.save(os.path.join(app.config['UPLOAD_FOLDER'], filename))
             file_url = url_for('uploaded_file', filename=filename)
             
-            detect_json = demo_maskrcnn(network = args.network, 
+            import time
+            time1 = time.time()
+            detect_map = demo_maskrcnn(network = args.network, 
                   ctx = ctx,
                   prefix = args.prefix,
                   epoch = args.epoch, 
@@ -231,8 +232,12 @@ def upload_file():
                   vis= args.vis, 
                   has_rpn = True,
                   thresh = args.thresh)
-            print detect_json
-            return html + '<br><img src=' + file_url + '>' + '<h2>'+ detect_json +'</h2>'
+            time2 = time.time()
+            detect_map["duration"] = time2-time1
+            detect_json = json.dumps(detect_map)
+            
+            os.remove(filename)
+            return detect_json
     return html
 
 
